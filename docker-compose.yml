@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: coherence-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DATABASE_URL=sqlite+aiosqlite:///./data/coherence.db
+      - CHROMA_PERSIST_DIR=./data/chroma_db
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:80
+      - USE_LOCAL_EMBEDDINGS=true
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - SPACY_MODEL=en_core_web_sm
+    volumes:
+      - backend-data:/app/data
+      - chroma-data:/app/chroma_db
+    networks:
+      - coherence-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: coherence-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - coherence-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  backend-data:
+    driver: local
+  chroma-data:
+    driver: local
+
+networks:
+  coherence-network:
+    driver: bridge
